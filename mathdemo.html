@@ -1,0 +1,332 @@
+<html>
+
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/14.7.0/math.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #333; line-height: 1.6; background-color: #f8f9fa; }
+        .search-container {
+            margin: 40px auto;
+            padding: 30px;
+            max-width: 700px;
+            border: 3px solid #007bff;
+            border-radius: 15px;
+            background-color: #f0f8ff;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+            text-align: center;
+        }
+        #mathSearchInput {
+            padding: 15px;
+            width: 60%;
+            font-size: 18px;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            outline: none;
+        }
+        #searchResultDisplay {
+            text-align: left;
+            margin-top: 25px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+        }
+        .custom-plot-container {
+            margin: 40px auto;
+            padding: 30px;
+            max-width: 700px;
+            border: 3px solid #28a745;
+            border-radius: 15px;
+            background-color: #f8fff9;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .reference-container {
+            margin: 40px auto;
+            padding: 30px;
+            max-width: 900px;
+            border: 3px solid #6f42c1;
+            border-radius: 15px;
+            background-color: #fcfaff;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .section-desc {
+            color: #666;
+            margin-bottom: 25px;
+            font-size: 1.1em;
+        }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; }
+        th { background-color: #6f42c1; color: white; padding: 15px; text-align: left; }
+        td { border-bottom: 1px solid #eee; padding: 12px 15px; text-align: left; }
+        tr:hover { background-color: #f1f1f1; }
+        h1, h2, h3 { margin-top: 0; }
+        .welcome-section { text-align: center; margin-bottom: 50px; }
+    </style>
+</head>
+
+<body>
+    <div id="welcome-area" class="welcome-section">
+        <h1 style="color: #333;">Math.js Interactive Explorer</h1>
+        <p class="section-desc">Explore the extensive capabilities of the Math.js library. This toolkit provides interactive documentation, live function plotting, and a custom equation sandbox designed to help you visualize and evaluate complex mathematical concepts in real-time.</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Page initialization logic can be placed here if needed.
+        });
+
+        let chartInstance = null;
+        let customChartInstance = null;
+
+        function generateGraph(fnName) {
+            const ctx = document.getElementById('mathChart');
+            if (!ctx) return;
+
+            const points = [];
+            // Calculate points for the function from -10 to 10
+            for (let x = -10; x <= 10; x += 0.2) {
+                try {
+                    const val = math[fnName](x);
+                    const numericVal = typeof val === 'number' ? val : math.number(val);
+                    if (Number.isFinite(numericVal)) {
+                        points.push({ x: Number(x.toFixed(2)), y: numericVal });
+                    }
+                } catch (e) {
+                    // Skip points that can't be calculated (e.g., sqrt of negative)
+                }
+            }
+
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: `y = ${fnName}(x)`,
+                        data: points,
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'linear', position: 'bottom' } } }
+            });
+        }
+
+        function searchMathFunction() {
+            const query = document.getElementById('mathSearchInput').value.trim();
+            const resultContainer = document.getElementById('searchResultDisplay');
+            
+            try {
+                const help = math.help(query).toJSON();
+                
+                let outputHtml = `<h3>Function: ${help.name}</h3>`;
+                outputHtml += `<p><strong>Explanation:</strong> ${help.description}</p>`;
+                outputHtml += `<p><strong>Example:</strong> <code>${help.examples[0]}</code></p>`;
+                
+                // Diagram: Actual live graph
+                outputHtml += `<div style="height: 300px; margin: 15px 0; background: #fff; border: 1px solid #ddd;"><canvas id="mathChart"></canvas></div>`;
+
+                // Interactive Equation
+                const syntax = help.syntax.find(s => s.includes('(')) || help.syntax[0];
+                const match = syntax.match(/\(([^)]+)\)/);
+                const vars = match ? match[1].split(',').map(v => v.trim()) : [];
+
+                outputHtml += `<div><strong>Equation with Inputs:</strong><br> ${help.name}(`;
+                vars.forEach((v, index) => {
+                    outputHtml += `<input type="number" id="math_input_${index}" placeholder="${v}" style="width: 60px; margin: 2px;">`;
+                    if (index < vars.length - 1) outputHtml += ', ';
+                });
+                outputHtml += `) = <span id="dynamicMathResult" style="font-weight: bold; color: blue;">?</span></div>`;
+                outputHtml += `<button onclick="runMath('${help.name}', ${vars.length})" style="margin-top: 10px; cursor: pointer;">Evaluate</button>`;
+
+                resultContainer.innerHTML = outputHtml;
+                generateGraph(help.name);
+            } catch (err) {
+                resultContainer.innerHTML = `<p style="color: red;">Could not find documentation for "${query}". Please try functions like 'sin', 'add', or 'round'.</p>`;
+            }
+        }
+
+        function runMath(fn, count) {
+            const args = [];
+            for (let i = 0; i < count; i++) {
+                const val = parseFloat(document.getElementById('math_input_' + i).value);
+                args.push(isNaN(val) ? 0 : val);
+            }
+            try {
+                const res = math[fn](...args);
+                document.getElementById('dynamicMathResult').innerText = res;
+            } catch (e) {
+                document.getElementById('dynamicMathResult').innerText = "Error";
+            }
+        }
+
+        function addFunctionInput() {
+            const container = document.getElementById('functionInputsContainer');
+            const div = document.createElement('div');
+            div.style.marginBottom = '10px';
+            div.innerHTML = `
+                <input type="text" class="equation-input" placeholder="e.g., y = x^2" style="padding: 15px; width: 60%; font-size: 18px; border: 2px solid #28a745; border-radius: 8px; outline: none;">
+                <button onclick="this.parentElement.remove()" style="padding: 10px 15px; background: #dc3545; color: white; border: none; border-radius: 8px; cursor: pointer; margin-left: 5px;">&times;</button>
+            `;
+            container.appendChild(div);
+        }
+
+        function plotCustomEquations() {
+            const container = document.getElementById('functionInputsContainer');
+            const inputs = container.querySelectorAll('.equation-input');
+            const datasets = [];
+            const colors = ['#28a745', '#dc3545', '#007bff', '#ffc107', '#17a2b8', '#6610f2'];
+
+            inputs.forEach((input, index) => {
+                const rawValue = input.value.trim();
+                if (!rawValue) return;
+
+                // Extract the right-hand side if user provided "y ="
+                const expression = rawValue.includes('=') ? rawValue.split('=')[1].trim() : rawValue;
+                const points = [];
+                
+                try {
+                    const compiledExpr = math.compile(expression);
+                    for (let x = -10; x <= 10; x += 0.1) {
+                        const yVal = compiledExpr.evaluate({ x: x });
+                        if (typeof yVal === 'number' && Number.isFinite(yVal)) {
+                            points.push({ x: Number(x.toFixed(2)), y: yVal });
+                        }
+                    }
+
+                    datasets.push({
+                        label: rawValue,
+                        data: points,
+                        borderColor: colors[index % colors.length],
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.4
+                    });
+                } catch (e) {
+                    console.error("Invalid equation:", rawValue);
+                }
+            });
+
+            const ctx = document.getElementById('customMathChart');
+            if (customChartInstance) customChartInstance.destroy();
+
+            customChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { datasets: datasets },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    scales: { 
+                        x: { type: 'linear', position: 'bottom' } 
+                    }
+                }
+            });
+        }
+
+        function fillSearchAndExecute(fnName) {
+            const input = document.getElementById('mathSearchInput');
+            input.value = fnName;
+            searchMathFunction();
+            // Scroll up to the search container so the user sees the result immediately
+            document.querySelector('.search-container').scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+
+    <div class="search-container">
+        <h2 style="color: #007bff; margin-top: 0;">Math.js Explorer</h2>
+        <p class="section-desc">Dive deep into the built-in Math.js library. Search for any function to view its official documentation, 
+        try interactive examples with live inputs, and visualize the function on a coordinate plane.</p>
+        <input type="text" id="mathSearchInput" placeholder="e.g. sin, round, multiply, atan2" onkeyup="if(event.key==='Enter') searchMathFunction()">
+        <button onclick="searchMathFunction()" style="padding: 15px 25px; font-size: 18px; background-color: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; margin-left: 10px;">Search</button>
+        
+        <div id="searchResultDisplay">
+            <em style="color: #888;">Documentation, examples, and interactive equations will appear here.</em>
+        </div>
+    </div>
+
+    <div class="custom-plot-container">
+        <h2 style="color: #28a745; margin-top: 0;">Custom Equation Plotter</h2>
+        <p class="section-desc">Create your own visualizations. Type full equations using <strong>y = ...</strong> with <strong>x</strong> as your variable (e.g., <code>y = -x^4 + 10x^2</code>). Add multiple functions to compare them.</p>
+        
+        <div id="functionInputsContainer" style="margin-bottom: 20px;">
+            <div style="margin-bottom: 10px;">
+                <input type="text" class="equation-input" placeholder="e.g., y = x^2" style="padding: 15px; width: 60%; font-size: 18px; border: 2px solid #28a745; border-radius: 8px; outline: none;" value="y = x^2">
+            </div>
+        </div>
+
+        <button onclick="addFunctionInput()" style="padding: 10px 20px; font-size: 16px; background-color: #6c757d; color: white; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 10px;">+ Add Function</button>
+        <br>
+        <button onclick="plotCustomEquations()" style="padding: 15px 25px; font-size: 18px; background-color: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer;">Plot All Functions</button>
+        <div style="height: 400px; margin-top: 25px; background: white; border: 1px solid #ddd; border-radius: 10px;"><canvas id="customMathChart"></canvas></div>
+    </div>
+
+    <div class="reference-container">
+        <h2 style="color: #6f42c1; margin-top: 0;">Quick Reference Table</h2>
+        <p class="section-desc">A curated list of commonly used functions. <strong>Click any function name</strong> to instantly populate 
+        the Explorer at the top for more details.</p>
+        <table>
+          <tr>
+            <th>Function</th>
+            <th>Example</th>
+            <th>Explanation</th>
+          </tr>
+          <tr>
+            <td><a href="javascript:void(0)" onclick="fillSearchAndExecute('add')">add</a></td>
+            <td>2 + 3 = 5</td>
+            <td>Adds two values together.</td>
+          </tr>
+          <tr>
+            <td><a href="javascript:void(0)" onclick="fillSearchAndExecute('subtract')">subtract</a></td>
+            <td>10 - 5 = 5</td>
+            <td>Subtracts the second value from the first.</td>
+          </tr>
+          <tr>
+            <td><a href="javascript:void(0)" onclick="fillSearchAndExecute('multiply')">multiply</a></td>
+            <td>6 * 7 = 42</td>
+            <td>Multiplies two values.</td>
+          </tr>
+          <tr>
+            <td><a href="javascript:void(0)" onclick="fillSearchAndExecute('divide')">divide</a></td>
+            <td>100 / 10 = 10</td>
+            <td>Divides the first value by the second.</td>
+          </tr>
+          <tr>
+            <td><a href="javascript:void(0)" onclick="fillSearchAndExecute('sqrt')">sqrt</a></td>
+            <td>sqrt(64) = 8</td>
+            <td>Calculates the square root of a value.</td>
+          </tr>
+          <tr>
+            <td><a href="javascript:void(0)" onclick="fillSearchAndExecute('pow')">pow</a></td>
+            <td>3 ^ 2 = 9</td>
+            <td>Calculates a base to the power of an exponent.</td>
+          </tr>
+          <tr>
+            <td><a href="javascript:void(0)" onclick="fillSearchAndExecute('sin')">sin</a></td>
+            <td>sin(0) = 0</td>
+            <td>Calculates the sine of a value in radians.</td>
+          </tr>
+          <tr>
+            <td><a href="javascript:void(0)" onclick="fillSearchAndExecute('abs')">abs</a></td>
+            <td>abs(-42) = 42</td>
+            <td>Returns the absolute value of a number.</td>
+          </tr>
+          <tr>
+            <td><a href="javascript:void(0)" onclick="fillSearchAndExecute('round')">round</a></td>
+            <td>round(3.1415, 2) = 3.14</td>
+            <td>Rounds a value to a specific number of decimal places.</td>
+          </tr>
+          <tr>
+            <td><a href="javascript:void(0)" onclick="fillSearchAndExecute('log')">log</a></td>
+            <td>log(1000, 10) = 3</td>
+            <td>Calculates the logarithm of a value.</td>
+          </tr>
+        </table>
+    </div>
+</body>
+</html>
